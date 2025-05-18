@@ -12,7 +12,7 @@ api_key = os.getenv('BINANCE_API_KEY')
 secret = os.getenv('BINANCE_SECRET_KEY')
 
 # ◾️ 사용할 잔고 비율 (예: 20%)
-ORDER_RATIO = 0.9
+ORDER_RATIO = 0.95
 
 # ◾️ 상관계수 기준
 corr_threshold = 0.8
@@ -47,7 +47,7 @@ def get_usdt_pairs():
         and not symbols.startswith('BTC')
     ]
 
-def fetch_ohlcv(symbol, timeframe='4h', limit=70):
+def fetch_ohlcv(symbol, timeframe='4h', limit=75):
     """📈 OHLCV 데이터 가져오기 (4시간봉 기준)"""
     try:
         return binance.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
@@ -202,13 +202,31 @@ def main():
             print("\n🚫 상관계수 0.9 이상인 코인이 없습니다.")
             return
 
+        # 사용자로부터 제외할 코인 입력 받기
+        print("\n❌ 매수하지 않을 코인들을 입력하세요 (쉼표로 구분, 예: ETH,BNB,ADA)")
+        exclude_coins = input("제외할 코인: ").strip().split(',')
+        # 입력값 처리: 공백 제거, 대문자 변환, /USDT 추가
+        exclude_coins = [f"{coin.strip().upper()}/USDT" for coin in exclude_coins if coin.strip()]
+        
+        # 제외할 코인 필터링
+        filtered_symbols = {symbol: corr for symbol, corr in symbols_corr_dict.items() 
+                          if symbol not in exclude_coins}
+        
+        if not filtered_symbols:
+            print("\n🚫 매수 가능한 코인이 없습니다.")
+            return
+            
+        print(f"\n📊 최종 매수 대상 코인 ({len(filtered_symbols)}개):")
+        for symbol, corr in filtered_symbols.items():
+            print(f"  - {symbol} (상관계수: {corr:.4f})")
+
         # 💰 잔고 조회
         balance = get_balance()
         print(f"\n💰 USDT 잔고: {balance:.2f} USDT")
 
         # 🛒 주문 실행
         order_amount = balance * ORDER_RATIO
-        place_orders(symbols_corr_dict, order_amount, leverage, is_hedge_mode)
+        place_orders(filtered_symbols, order_amount, leverage, is_hedge_mode)
 
     except Exception as e:
         print(f"\n❗️예상치 못한 에러 발생: {e}")
